@@ -11,6 +11,7 @@ Both return the same shape:
 import json
 import os
 import re
+import urllib.error
 import urllib.request
 
 SCHEMA_HINT = (
@@ -42,8 +43,41 @@ def _extract_json(text):
     return json.loads(m.group(0))
 
 
+def _openai_compatible(base_url, key, model, text):
+    """One call to any OpenAI-compatible chat endpoint (OpenAI, Gemini, Groq, Ollama)."""
+    body = {"model": model,
+            "response_format": {"type": "json_object"},
+            "messages": [{"role": "system", "content": SYSTEM},
+                         {"role": "user", "content": text}]}
+    headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
+    url = base_url.rstrip("/") + "/chat/completions"
+    try:
+        out = _post(url, headers, body)
+    except urllib.error.HTTPError as e:
+        if e.code != 400:
+            raise
+        body.pop("response_format")  # some providers reject it; the prompt still asks for JSON
+        out = _post(url, headers, body)
+    return _extract_json(out["choices"][0]["message"]["content"])
+
+
+def provider():
+    """Which LLM will be used, based on the environment. None means the rule-based stand-in."""
+    if os.environ.get("GEMINI_API_KEY"):
+        return "Gemini (" + os.environ.get("MODEL", "gemini-2.5-flash") + ")"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "OpenAI (" + os.environ.get("MODEL", "gpt-4o-mini") + ")"
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "Anthropic (" + os.environ.get("MODEL", "claude-haiku-4-5") + ")"
+    return None
+
+
 def llm_parse(text):
-    """Calls OpenAI or Anthropic depending on which key is set. Returns None if no key."""
+    """Calls Gemini, OpenAI or Anthropic depending on which key is set. Returns None if no key."""
+    if os.environ.get("GEMINI_API_KEY"):
+        return _openai_compatible(
+            "https://generativelanguage.googleapis.com/v1beta/openai/",
+            os.environ["GEMINI_API_KEY"], os.environ.get("MODEL", "gemini-2.5-flash"), text)
     if os.environ.get("OPENAI_API_KEY"):
         out = _post(
             "https://api.openai.com/v1/chat/completions",

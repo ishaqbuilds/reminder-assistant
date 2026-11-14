@@ -153,7 +153,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    has_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    print("Parser:", "LLM" if has_key else "rule-based stand-in (no API key set)")
+    print("Parser:", extract.provider() or "rule-based stand-in (no API key set)")
     print("Open http://localhost:8000  (Ctrl+C to stop)")
     HTTPServer(("127.0.0.1", 8000), Handler).serve_forever()

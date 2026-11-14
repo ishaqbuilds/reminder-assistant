@@ -11,7 +11,7 @@ README prose word count: [FILL IN]
 - Python 3 standard library only (`http.server`); no packages to install.
 - HTML and JavaScript front end (`static/index.html`).
 - Field extraction (`extract.py`):
-  - **LLM route:** OpenAI or Anthropic API, asked for JSON fields. Used when an API key is set.
+  - **LLM route:** Google Gemini (free tier, `gemini-2.5-flash`) through its OpenAI-compatible endpoint, asked for JSON fields. OpenAI or Anthropic keys also work. Used when an API key is set.
   - **Rule-based route:** a simple built-in parser used when no key is set. It stands in for the LLM so the prototype runs without a key.
 - [FILL IN: AI coding tools you used]
 
@@ -21,14 +21,16 @@ python app.py
 ```
 Open http://localhost:8000.
 
-Optional, to use an LLM instead of the rule-based parser (use your own key and never commit it):
+Optional, to use an LLM instead of the rule-based parser. Get a free key at https://aistudio.google.com (API keys). Use your own key and never commit it:
 ```
-# macOS/Linux
-export OPENAI_API_KEY=your-key        # or ANTHROPIC_API_KEY=your-key
 # Windows PowerShell
-$env:OPENAI_API_KEY="your-key"
+$env:GEMINI_API_KEY="your-key"
+python app.py
+# macOS/Linux
+export GEMINI_API_KEY=your-key
 python app.py
 ```
+`OPENAI_API_KEY` or `ANTHROPIC_API_KEY` also work. Set `MODEL` to change the model.
 
 Try:
 1. `Remind me to call mum at 3:15 tomorrow`: saved straight away with Undo (high confidence).
