@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reminder Assistant</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 32px auto; padding: 0 16px; color: #1d2330; background: #f6f7f9; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: #5b6475; font-size: 14px; margin-top: 0; }
+  .card { background: #fff; border: 1px solid #dde1e8; border-radius: 10px; padding: 16px; margin: 16px 0; }
+  .row { display: flex; gap: 8px; }
+  input[type=text] { flex: 1; padding: 10px; font-size: 16px; border: 1px solid #c4cad4; border-radius: 6px; }
+  button { padding: 9px 14px; font-size: 15px; border-radius: 6px; border: 1px solid #c4cad4; background: #fff; cursor: pointer; }
+  button.primary { background: #2456d6; color: #fff; border-color: #2456d6; }
+  .chips button { font-size: 13px; padding: 5px 9px; margin: 4px 4px 0 0; color: #2456d6; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #5b6475; }
+  .heard span { padding: 1px 2px; border-radius: 3px; }
+  .low { background: #ffe3a3; border-bottom: 2px dotted #b07800; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  td { padding: 8px 4px; border-bottom: 1px solid #eef0f4; }
+  td.k { color: #5b6475; width: 70px; }
+  td.v { font-weight: 600; }
+  .warn { color: #a3360f; font-size: 14px; margin: 4px 0; }
+  .ok { color: #1c7a3c; }
+  .meta { font-size: 12px; color: #7a8394; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .toggle { font-size: 13px; color: #5b6475; margin-top: 8px; }
+  ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+<h1>Reminder Assistant</h1>
+<p class="sub">Type what you would say. <span class="meta">(Speech input is simulated with typing.)</span></p>
+
+<div class="card">
+  <div class="row">
+    <input id="text" type="text" placeholder="Remind me to call mum at 3:15" autofocus>
+    <button class="primary" onclick="send()">Say it</button>
+  </div>
+  <div class="chips">
+    <span class="meta">I can set one-off reminders at a time, e.g.</span><br>
+    <button onclick="fill('Remind me to call mum at 3:15 tomorrow')">call mum at 3:15 tomorrow</button>
+    <button onclick="fill('Remind me to take my tablets at 9pm today')">take my tablets at 9pm</button>
+  </div>
+  <label class="toggle"><input id="mishear" type="checkbox"> Simulate a mishearing (test mode)</label>
+</div>
+
+<div id="status" class="meta"></div>
+<div id="result"></div>
+
+<div class="card">
+  <div class="label">Your reminders</div>
+  <ul id="list"></ul>
+</div>
+
+<script>
+let current = null;   // { fields, edits }
+
+function fill(t) { document.getElementById('text').value = t; }
+
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+  return { ok: r.ok, data: await r.json() };
+}
+
+async function send() {
+  const text = document.getElementById('text').value.trim();
+  if (!text) return;
+  document.getElementById('status').textContent = 'Working on it…';   // feedback within ~0.1 s
+  const { data } = await post('/parse', { text, mishear: document.getElementById('mishear').checked });
+  document.getElementById('status').textContent = '';
+  render(data);
+}
+
+function heardHTML(words) {
+  return words.map(w => `<span class="${w.confidence < 0.8 ? 'low' : ''}" title="confidence ${w.confidence}">${w.word}</span>`).join(' ');
+}
+
+function prettyDate(d) { return d === 'today' ? 'Today' : d === 'tomorrow' ? 'Tomorrow' : (d || '—'); }
+
+function render(data) {
+  const el = document.getElementById('result');
+  if (data.out_of_scope) {
+    el.innerHTML = `<div class="card">
+      <div class="label">I heard</div><p class="heard">${heardHTML(data.words)}</p>
+      <p>I can't set ${data.reason} yet. I can set a one-off reminder at a specific time.</p>
+      <p>For example: <em>"Remind me to buy milk at 6pm today."</em></p>
+      <div class="actions"><button onclick="clearResult()">OK</button></div></div>`;
+    return;
+  }
+  current = { fields: { ...data.fields }, edits: [], confidence: data.confidence, words: data.words, route: data.route };
+  if (!data.must_confirm) {   // high confidence and valid: save, show it, offer undo
+    save(false);
+    return;
+  }
+  showCard(data.problems);
+}
+
+function showCard(problems) {
+  const f = current.fields;
+  const lowWord = current.words.some(w => w.confidence < 0.8);
+  const lastEdit = current.edits[current.edits.length - 1];
+  const why = problems.length ? problems.map(p => `<p class="warn">${p.message}</p>`).join('')
+            : lastEdit ? `<p class="ok">Changed ${lastEdit.field} from ${lastEdit.from || 'nothing'} to ${lastEdit.to}. Everything else is kept.</p>`
+            : lowWord ?`<p class="warn">I wasn't sure about the highlighted part. Please check before I save.</p>` : '';
+  const row = (k, label, v) => `<tr><td class="k">${label}</td><td class="v">${v || '—'}</td>
+      <td style="text-align:right"><button onclick="editField('${k}')">Change</button></td></tr>`;
+  document.getElementById('result').innerHTML = `<div class="card">
+    <div class="label">I heard</div><p class="heard">${heardHTML(current.words)}</p>
+    <div class="label">I understood</div>
+    <table>${row('task','What',f.task)}${row('time','Time',f.time)}${row('date','Day',prettyDate(f.date))}</table>
+    ${why}
+    <div class="actions">
+      <button class="primary" onclick="save(true)" ${problems.length ? 'disabled' : ''}>Save reminder</button>
+      <button onclick="cancel()">Cancel</button>
+    </div>
+    <p class="meta">Confidence ${current.confidence} · parser: ${current.route} · nothing is saved until you choose Save</p>
+  </div>`;
+}
+
+async function editField(k) {
+  const labels = { task: 'What should I remind you about?', time: 'What time? (HH:MM, 24-hour)', date: 'Which day? (today, tomorrow or YYYY-MM-DD)' };
+  const v = prompt(labels[k], current.fields[k] || '');
+  if (v === null) return;
+  current.edits.push({ field: k, from: current.fields[k], to: v.trim() });
+  current.fields[k] = v.trim();
+  const { data } = await post('/validate', { fields: current.fields });
+  showCard(data.problems);
+}
+
+async function save(confirmed) {
+  const { ok, data } = await post('/save', { fields: current.fields, confirmed, edits: current.edits });
+  if (!ok) { showCard(data.problems); return; }
+  const f = data;
+  document.getElementById('result').innerHTML = `<div class="card">
+    <div class="label">I heard</div><p class="heard">${heardHTML(current.words)}</p>
+    <p class="ok">Saved: <strong>${f.task}</strong> at <strong>${f.time}</strong>, ${prettyDate(f.date).toLowerCase()}.</p>
+    <div class="actions"><button onclick="undo(${f.id})">Undo</button><button onclick="clearResult()">Done</button></div>
+    <p class="meta">${confirmed ? 'Saved after you confirmed.' : 'Saved straight away because I was confident (' + current.confidence + ').'}</p>
+  </div>`;
+  loadList();
+}
+
+async function undo(id) { await post('/undo', { id }); clearResult(); loadList(); }
+async function cancel() { await post('/cancel', { fields: current.fields }); clearResult(); }
+function clearResult() { document.getElementById('result').innerHTML = ''; current = null; }
+
+async function loadList() {
+  const items = await (await fetch('/reminders')).json();
+  document.getElementById('list').innerHTML = items.length
+    ? items.map(r => `<li>${r.task} — ${r.time}, ${prettyDate(r.date).toLowerCase()}</li>`).join('')
+    : '<li class="meta">None yet</li>';
+}
+
+document.getElementById('text').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+loadList();
+</script>
+</body>
+</html>
