@@ -11,8 +11,8 @@ README prose word count: [FILL IN]
 - Python 3 standard library only (`http.server`); no packages to install.
 - HTML and JavaScript front end (`static/index.html`).
 - Field extraction (`extract.py`):
-  - **LLM route:** Google Gemini (free tier, `gemini-3.8-flash`) through its OpenAI-compatible endpoint, asked for JSON fields. OpenAI or Anthropic keys also work. Used when an API key is set.
-  - **Rule-based route:** a simple built-in parser used when no key is set. It stands in for the LLM so the prototype runs without a key.
+  - **LLM route:** Google Gemini (free tier, `gemini-3.6-flash`) through its OpenAI-compatible endpoint, asked for JSON fields. OpenAI or Anthropic keys also work. Used when an API key is set.
+  - **Rule-based route:** a simple built-in parser used when no key is set or the LLM call fails.
 - [FILL IN: AI coding tools you used]
 
 ## Running it
@@ -39,8 +39,11 @@ Try:
 4. `Remind me to call the dentist`: no time given, so it asks for the time instead of guessing.
 
 ## Development record
-[FILL IN as you go. A few entries are enough, each with what changed, why, and what you checked. Link commits.]
-- Example format: *Test B (mishearing): after correcting the time, the card still said "I wasn't sure". Changed it to confirm what was changed. Retested and the message updated (commit abc123).*
+- **Starter prototype.** Generated with Claude and tested with four cases: clear request, simulated mishearing, out of scope, missing time. ([commit])
+- **Rule parser limits.** "Half three tomorrow" gave no time and put "at half 3" into the task; "next Tuesday at 10am" was read as today, but the validator blocked it ("10:00 today has already passed"). This showed the need for an LLM and confirmed that validating model output matters.
+- **Free LLM.** Added Google Gemini's free tier so no paid key is needed. ([commit])
+- **HTTP 404 from Gemini.** Every request fell back to the rule parser. I listed the models my key could use and found the default (`gemini-2.5-flash`) was no longer offered; switched to an available model. ([commit])
+- **Timeouts.** `gemini-3.8-flash` took over 30 seconds and timed out. I measured `gemini-3.6-flash` directly at 2.5 seconds, switched to it, lowered the model's reasoning effort, and raised the timeout to 45 seconds. Retested: "half three tomorrow" now gives 15:30 tomorrow, saved at confidence 0.95. ([commit])
 
 ## AI assistance
 [FILL IN: tools used, what you asked for, what you changed or rejected, and how you checked it. For example: "Used Claude to generate the starter app; I tested the four cases above, changed X, rejected Y."]
