@@ -11,7 +11,7 @@ README prose word count: [FILL IN]
 - Python 3 standard library only (`http.server`); no packages to install.
 - HTML and JavaScript front end (`static/index.html`).
 - Field extraction (`extract.py`):
-  - **LLM route:** Google Gemini (free tier, `gemini-2.5-flash`) through its OpenAI-compatible endpoint, asked for JSON fields. OpenAI or Anthropic keys also work. Used when an API key is set.
+  - **LLM route:** Google Gemini (free tier, `gemini-3.8-flash`) through its OpenAI-compatible endpoint, asked for JSON fields. OpenAI or Anthropic keys also work. Used when an API key is set.
   - **Rule-based route:** a simple built-in parser used when no key is set. It stands in for the LLM so the prototype runs without a key.
 - [FILL IN: AI coding tools you used]
 

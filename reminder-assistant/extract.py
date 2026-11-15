@@ -64,7 +64,7 @@ def _openai_compatible(base_url, key, model, text):
 def provider():
     """Which LLM will be used, based on the environment. None means the rule-based stand-in."""
     if os.environ.get("GEMINI_API_KEY"):
-        return "Gemini (" + os.environ.get("MODEL", "gemini-2.5-flash") + ")"
+        return "Gemini (" + os.environ.get("MODEL", "gemini-3.8-flash") + ")"
     if os.environ.get("OPENAI_API_KEY"):
         return "OpenAI (" + os.environ.get("MODEL", "gpt-4o-mini") + ")"
     if os.environ.get("ANTHROPIC_API_KEY"):
@@ -77,7 +77,7 @@ def llm_parse(text):
     if os.environ.get("GEMINI_API_KEY"):
         return _openai_compatible(
             "https://generativelanguage.googleapis.com/v1beta/openai/",
-            os.environ["GEMINI_API_KEY"], os.environ.get("MODEL", "gemini-2.5-flash"), text)
+            os.environ["GEMINI_API_KEY"], os.environ.get("MODEL", "gemini-3.8-flash"), text)
     if os.environ.get("OPENAI_API_KEY"):
         out = _post(
             "https://api.openai.com/v1/chat/completions",
