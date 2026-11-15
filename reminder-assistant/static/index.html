@@ -77,7 +77,16 @@ function heardHTML(words) {
   return words.map(w => `<span class="${w.confidence < 0.8 ? 'low' : ''}" title="confidence ${w.confidence}">${w.word}</span>`).join(' ');
 }
 
-function prettyDate(d) { return d === 'today' ? 'Today' : d === 'tomorrow' ? 'Tomorrow' : (d || '—'); }
+function prettyDate(d) {
+  if (d === 'today') return 'Today';
+  if (d === 'tomorrow') return 'Tomorrow';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d || '')) {
+    return new Date(d + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  return d || '—';
+}
+
+const AI_DOWN = `<p class="warn">The AI isn't responding, so I used a simpler backup. Please check this carefully before saving.</p>`;
 
 function render(data) {
   const el = document.getElementById('result');
@@ -89,7 +98,8 @@ function render(data) {
       <div class="actions"><button onclick="clearResult()">OK</button></div></div>`;
     return;
   }
-  current = { fields: { ...data.fields }, edits: [], confidence: data.confidence, words: data.words, route: data.route };
+  current = { fields: { ...data.fields }, edits: [], confidence: data.confidence, words: data.words,
+              route: data.route, aiFailed: data.ai_failed };
   if (!data.must_confirm) {   // high confidence and valid: save, show it, offer undo
     save(false);
     return;
@@ -107,6 +117,7 @@ function showCard(problems) {
   const row = (k, label, v) => `<tr><td class="k">${label}</td><td class="v">${v || '—'}</td>
       <td style="text-align:right"><button onclick="editField('${k}')">Change</button></td></tr>`;
   document.getElementById('result').innerHTML = `<div class="card">
+    ${current.aiFailed ? AI_DOWN : ''}
     <div class="label">I heard</div><p class="heard">${heardHTML(current.words)}</p>
     <div class="label">I understood</div>
     <table>${row('task','What',f.task)}${row('time','Time',f.time)}${row('date','Day',prettyDate(f.date))}</table>
@@ -137,7 +148,7 @@ async function save(confirmed) {
     <div class="label">I heard</div><p class="heard">${heardHTML(current.words)}</p>
     <p class="ok">Saved: <strong>${f.task}</strong> at <strong>${f.time}</strong>, ${prettyDate(f.date).toLowerCase()}.</p>
     <div class="actions"><button onclick="undo(${f.id})">Undo</button><button onclick="clearResult()">Done</button></div>
-    <p class="meta">${confirmed ? 'Saved after you confirmed.' : 'Saved straight away because I was confident (' + current.confidence + ').'}</p>
+    <p class="meta">${confirmed ? 'Saved after you confirmed.' : 'Saved straight away because I was confident (' + current.confidence + ').'} · parser: ${current.route}</p>
   </div>`;
   loadList();
 }

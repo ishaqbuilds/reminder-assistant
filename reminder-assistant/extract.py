@@ -11,6 +11,7 @@ Both return the same shape:
 import json
 import os
 import re
+from datetime import date
 import urllib.error
 import urllib.request
 
@@ -20,14 +21,21 @@ SCHEMA_HINT = (
     '"date" ("today", "tomorrow", "YYYY-MM-DD" or null), '
     '"out_of_scope" (true if the request is not a time-based reminder, '
     'e.g. location-based, recurring, or not a reminder at all), '
-    '"reason" (short string if out_of_scope, else null). '
+    '"reason" (if out_of_scope, exactly one of "location-based reminders", '
+    '"repeating reminders", "requests that are not reminders"; else null). '
     'Use null when the request does not say something. Never guess a time.'
 )
 
-SYSTEM = (
-    "You extract reminder details from a user's spoken request. "
-    "You only support one-off reminders at a specific time. " + SCHEMA_HINT
-)
+
+def system_prompt():
+    """Built on every call so the model knows today's date. A model has no clock of
+    its own, so without this it cannot work out "next Tuesday" (Lecture 08, 10)."""
+    today = date.today()
+    return ("You extract reminder details from a user's spoken request. "
+            "You only support one-off reminders at a specific time. "
+            f"Today is {today.strftime('%A')} {today.isoformat()}. "
+            "Turn relative days such as 'next Tuesday' or 'on Friday' into a YYYY-MM-DD date. "
+            + SCHEMA_HINT)
 
 
 def _post(url, headers, body):
@@ -47,7 +55,7 @@ def _openai_compatible(base_url, key, model, text):
     """One call to any OpenAI-compatible chat endpoint (OpenAI, Gemini, Groq, Ollama)."""
     body = {"model": model,
             "response_format": {"type": "json_object"},
-            "messages": [{"role": "system", "content": SYSTEM},
+            "messages": [{"role": "system", "content": system_prompt()},
                          {"role": "user", "content": text}]}
     if "generativelanguage" in base_url:
         # Newer Gemini models "think" before answering, which made replies take over
@@ -91,7 +99,7 @@ def llm_parse(text):
              "Content-Type": "application/json"},
             {"model": os.environ.get("MODEL", "gpt-4o-mini"),
              "response_format": {"type": "json_object"},
-             "messages": [{"role": "system", "content": SYSTEM},
+             "messages": [{"role": "system", "content": system_prompt()},
                           {"role": "user", "content": text}]},
         )
         return _extract_json(out["choices"][0]["message"]["content"])
@@ -102,7 +110,7 @@ def llm_parse(text):
              "anthropic-version": "2023-06-01",
              "content-type": "application/json"},
             {"model": os.environ.get("MODEL", "claude-haiku-4-5"),
-             "max_tokens": 300, "system": SYSTEM,
+             "max_tokens": 300, "system": system_prompt(),
              "messages": [{"role": "user", "content": text}]},
         )
         return _extract_json(out["content"][0]["text"])

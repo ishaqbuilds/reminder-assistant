@@ -1,4 +1,11 @@
+"""Reminder assistant prototype.
 
+Run:  python app.py   then open http://localhost:8000
+
+Flow: typed request (simulated speech) -> optional simulated mishearing
+      -> parser (LLM or rule stand-in) -> validator -> confidence policy
+      -> confirmation card -> user confirms / edits one field / cancels -> saved list
+"""
 import json
 import re
 import time as _time
@@ -13,9 +20,13 @@ import extract
 ROOT = Path(__file__).parent
 REMINDERS = ROOT / "reminders.json"
 LOG = ROOT / "interaction_log.jsonl"
-CONFIDENCE_THRESHOLD = 0.80  
+CONFIDENCE_THRESHOLD = 0.80  # below this, the user must confirm before saving
+KNOWN_LIMITS = ("location-based reminders", "repeating reminders", "requests that are not reminders")
 
-
+# --- Simulated speech recognition -------------------------------------------
+# Real speech recognisers return a transcript plus a confidence per word.
+# We simulate that: words are heard at 0.95 unless the "mishear" switch
+# swaps them, in which case the swapped word gets a low confidence.
 MISHEARINGS = [
     (r"\b3:15\b", "3:50"), (r"\bfifteen\b", "fifty"), (r"\b(\d{1,2}):15\b", r"\1:50"),
     (r"\bmum\b", "mom"), (r"\bdentist\b", "dentist's"),
@@ -56,7 +67,11 @@ def validate(fields):
     d = fields.get("date")
     if d not in ("today", "tomorrow"):
         try:
-            datetime.strptime(d or "", "%Y-%m-%d")
+            day = datetime.strptime(d or "", "%Y-%m-%d").date()
+            if day < _date.today():
+                problems.append({"field": "date", "message": f"{d} has already passed."})
+            elif day == _date.today():
+                d = "today"
         except ValueError:
             problems.append({"field": "date", "message": "I didn't catch which day."})
     if d == "today" and t and not problems:
@@ -103,17 +118,23 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/parse":
             heard, words = simulate_hearing(body.get("text", ""), body.get("mishear", False))
             fields, route = extract.parse(heard)
+            ai_failed = route != "llm" and extract.provider() is not None
             if fields.get("out_of_scope"):
-                result = {"heard": heard, "words": words, "route": route,
-                          "out_of_scope": True, "reason": fields.get("reason")}
+                reason = fields.get("reason")
+                if reason not in KNOWN_LIMITS:  # never show raw model wording to the user
+                    reason = "that kind of reminder"
+                result = {"heard": heard, "words": words, "route": route, "ai_failed": ai_failed,
+                          "out_of_scope": True, "reason": reason}
             else:
                 fields = {k: fields.get(k) for k in ("task", "time", "date")}
                 problems = validate(fields)
                 conf = overall_confidence(words, route)
-                result = {"heard": heard, "words": words, "route": route,
+                result = {"heard": heard, "words": words, "route": route, "ai_failed": ai_failed,
                           "out_of_scope": False, "fields": fields, "problems": problems,
                           "confidence": conf,
-                          "must_confirm": bool(problems) or conf < CONFIDENCE_THRESHOLD}
+                          # if the AI failed, the backup parser is less reliable: always ask
+                          "must_confirm": bool(problems) or ai_failed
+                                          or conf < CONFIDENCE_THRESHOLD}
             log("parse", request=body.get("text"), **result)
             return self._send(200, result)
 
@@ -128,6 +149,12 @@ class Handler(BaseHTTPRequestHandler):
                 log("save_refused", fields=fields, problems=problems)
                 return self._send(400, {"problems": problems})
             reminders = load_reminders()
+            same = [r for r in reminders if (r["task"].lower(), r["time"], r["date"])
+                    == (fields["task"].lower(), fields["time"], fields["date"])]
+            if same:  # block exact duplicates
+                problems = [{"field": "task", "message": "You already have this reminder."}]
+                log("save_refused", fields=fields, problems=problems)
+                return self._send(400, {"problems": problems})
             item = {"id": int(_time.time() * 1000), **fields,
                     "confirmed_by_user": body.get("confirmed", False),
                     "edits": body.get("edits", [])}
