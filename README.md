@@ -46,7 +46,27 @@ Try:
 - **Timeouts.** `gemini-3.8-flash` took over 30 seconds and timed out. I measured `gemini-3.6-flash` directly at 2.5 seconds, switched to it, lowered the model's reasoning effort, and raised the timeout to 45 seconds. Retested: "half three tomorrow" now gives 15:30 tomorrow, saved at confidence 0.95. ([commit])
 
 ## AI assistance
-[FILL IN: tools used, what you asked for, what you changed or rejected, and how you checked it. For example: "Used Claude to generate the starter app; I tested the four cases above, changed X, rejected Y."]
+## AI assistance
+**Tools**
+- **Claude (Anthropic, claude.ai):** development and writing assistant.
+- **Google Gemini 3.6 Flash:** the model the app itself calls to extract reminder fields. It is part of the system, not a development aid.
+
+**What I asked Claude to help with**
+- Generating the starter prototype (Python server, rule-based parser, confirmation-card page) from my Assignment 1 design: show what was heard, confirm when unsure, correct one field.
+- Diagnosing and fixing problems I found while testing: the Gemini 404, the timeouts, the "next Tuesday" refusal, the silent fallback and duplicate reminders.
+- Drawing the system diagram, laying out the storyboards from my screenshots, and drafting the report text.
+
+**How I used, changed or rejected its suggestions**
+- Claude first suggested a paid OpenAI key. I chose a free option instead, so Gemini support was added.
+- Claude's suggested default model (`gemini-2.5-flash`) returned 404 for my key. I listed the models my key could use, and the next suggestion (`gemini-3.8-flash`) timed out. I measured response times myself in PowerShell (3.6 Flash: 2.5 s) and picked the faster model.
+- Each fix responded to a problem I found by testing, not one Claude predicted. The commit messages and development record show which problem each change addressed.
+- [Add one or two edits you made yourself to the report or code, e.g. wording you rewrote or a value you changed.]
+
+**How I checked the results**
+- Ran the same test requests after every change (clear request, simulated mishearing, out of scope, missing time, "half three", "tonight", "next Tuesday") and compared the screens, keeping screenshots.
+- Checked the parser label on screen (`parser: llm` versus `rules (LLM failed)`) and the terminal errors to confirm which route had actually run.
+- Checked every reference in the report against my verified Assignment 1 sources and the lecture slides; none were taken from AI output without checking.
+- Kept the API key out of every file: it is set only in the terminal.
 
 ## Additional files
 None.
